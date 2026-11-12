@@ -5,9 +5,11 @@ interface EstudiantesTableProps {
   carreraNombre: (carreraId: number) => string
   selectedId: number | null
   onSelect: (id: number) => void
+  /** When provided, each row shows an "Editar" button. */
+  onEdit?: (estudiante: EstudianteResponse) => void
 }
 
-export function EstudiantesTable({ estudiantes, carreraNombre, selectedId, onSelect }: EstudiantesTableProps) {
+export function EstudiantesTable({ estudiantes, carreraNombre, selectedId, onSelect, onEdit }: EstudiantesTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-left text-sm">
@@ -45,6 +47,18 @@ export function EstudiantesTable({ estudiantes, carreraNombre, selectedId, onSel
                 >
                   Ver detalle<span className="sr-only"> de {e.nombre}</span>
                 </button>
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      onEdit(e)
+                    }}
+                    className="ml-3 text-indigo-700 underline focus-visible:outline-2 focus-visible:outline-indigo-600"
+                  >
+                    Editar<span className="sr-only"> a {e.nombre}</span>
+                  </button>
+                )}
               </td>
             </tr>
           ))}

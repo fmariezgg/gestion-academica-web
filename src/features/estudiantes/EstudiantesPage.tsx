@@ -3,12 +3,18 @@ import { readErrorMessage } from '@/shared/api/errorMessages'
 import { Spinner } from '@/shared/ui/Spinner'
 import { EmptyMessage, ErrorMessage } from '@/shared/ui/StateMessage'
 import { inputClass } from '@/shared/ui/Field'
+import { canManageEstudiantes } from '@/features/auth/permissions'
 import { useAuth } from '@/features/auth/useAuth'
+import { Button } from '@/shared/ui/Button'
 import { useCarreras } from '@/features/carreras/useCarreras'
 import { EstudianteDetail } from './EstudianteDetail'
 import { EstudianteForm } from './EstudianteForm'
 import { EstudiantesTable } from './EstudiantesTable'
+import type { EstudianteResponse } from './types'
 import { useEstudiantes } from './useEstudiantes'
+
+// UI state only: which form is open. Server data lives in the query cache.
+type FormMode = { mode: 'create' } | { mode: 'edit'; estudiante: EstudianteResponse }
 
 export function EstudiantesPage() {
   const { session } = useAuth()
@@ -17,6 +23,9 @@ export function EstudiantesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [carreraFilter, setCarreraFilter] = useState('')
+  const [formMode, setFormMode] = useState<FormMode | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const canManage = canManageEstudiantes(session?.rol)
 
   const carreraNombre = (carreraId: number) =>
     carreras.data?.find((c) => c.id === carreraId)?.nombre ?? `Carrera #${carreraId}`
@@ -35,7 +44,48 @@ export function EstudiantesPage() {
     <div className="flex flex-col gap-6">
       <h2 className="text-2xl font-semibold">Estudiantes</h2>
 
-      {session?.rol === 'ADMIN' && carreras.data && <EstudianteForm carreras={carreras.data} />}
+      {canManage && (
+        <div className="flex flex-col gap-3">
+          {formMode === null && (
+            <div>
+              <Button
+                onClick={() => {
+                  setNotice(null)
+                  setFormMode({ mode: 'create' })
+                }}
+              >
+                Nuevo estudiante
+              </Button>
+            </div>
+          )}
+
+          {formMode !== null && carreras.isError && (
+            <ErrorMessage
+              message={readErrorMessage(carreras.error, 'las carreras')}
+              onRetry={() => carreras.refetch()}
+            />
+          )}
+
+          {formMode !== null && carreras.data && (
+            <EstudianteForm
+              key={formMode.mode === 'edit' ? `edit-${formMode.estudiante.id}` : 'create'}
+              carreras={carreras.data}
+              estudiante={formMode.mode === 'edit' ? formMode.estudiante : undefined}
+              onSaved={(message) => {
+                setNotice(message)
+                if (formMode.mode === 'edit') setFormMode(null)
+              }}
+              onCancel={() => setFormMode(null)}
+            />
+          )}
+        </div>
+      )}
+
+      {notice && (
+        <p role="status" className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+          {notice}
+        </p>
+      )}
 
       <div aria-live="polite" className="flex flex-col gap-4">
         {estudiantes.isPending && <Spinner label="Cargando estudiantes…" />}
@@ -75,6 +125,14 @@ export function EstudiantesPage() {
                 carreraNombre={carreraNombre}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                onEdit={
+                  canManage
+                    ? (estudiante) => {
+                        setNotice(null)
+                        setFormMode({ mode: 'edit', estudiante })
+                      }
+                    : undefined
+                }
               />
             )}
           </>

@@ -12,3 +12,7 @@ export function getById(id: number, signal?: AbortSignal) {
 export function create(data: EstudianteRequest) {
   return http<EstudianteResponse>('/estudiantes', { method: 'POST', body: data })
 }
+
+export function update(id: number, data: EstudianteRequest) {
+  return http<EstudianteResponse>(`/estudiantes/${id}`, { method: 'PUT', body: data })
+}

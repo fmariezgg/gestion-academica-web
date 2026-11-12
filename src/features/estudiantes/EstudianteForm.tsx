@@ -6,7 +6,8 @@ import { ApiError } from '@/shared/api/httpClient'
 import { Button } from '@/shared/ui/Button'
 import { Field, inputClass } from '@/shared/ui/Field'
 import type { Carrera } from '@/features/carreras/types'
-import { useCreateEstudiante } from './useEstudiantes'
+import type { EstudianteResponse } from './types'
+import { useCreateEstudiante, useUpdateEstudiante } from './useEstudiantes'
 
 // Mirrors the backend rules (the server remains the source of truth).
 const schema = z.object({
@@ -22,31 +23,59 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 const fieldNames: ReadonlySet<string> = new Set(['nombre', 'correo', 'edad', 'carrera'])
 
-export function EstudianteForm({ carreras }: { carreras: Carrera[] }) {
+interface EstudianteFormProps {
+  carreras: Carrera[]
+  /** When present the form edits this student; otherwise it creates one. */
+  estudiante?: EstudianteResponse
+  onSaved: (message: string) => void
+  onCancel: () => void
+}
+
+export function EstudianteForm({ carreras, estudiante, onSaved, onCancel }: EstudianteFormProps) {
   const create = useCreateEstudiante()
+  const update = useUpdateEstudiante()
   const [formError, setFormError] = useState<string | null>(null)
-  const [created, setCreated] = useState<string | null>(null)
+  const [networkError, setNetworkError] = useState(false)
+  const isEdit = estudiante !== undefined
+  const isPending = create.isPending || update.isPending
   const {
     register,
     handleSubmit,
     setError,
     reset,
     formState: { errors },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) })
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    // The response uses `carreraId`, the request/form uses `carrera`.
+    defaultValues: estudiante
+      ? { nombre: estudiante.nombre, correo: estudiante.correo, edad: estudiante.edad, carrera: estudiante.carreraId }
+      : undefined,
+  })
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null)
-    setCreated(null)
+    setNetworkError(false)
     try {
-      const estudiante = await create.mutateAsync(values)
-      setCreated(`Estudiante "${estudiante.nombre}" creado correctamente`)
-      reset()
+      if (estudiante) {
+        const saved = await update.mutateAsync({ id: estudiante.id, data: values })
+        onSaved(`Estudiante "${saved.nombre}" actualizado correctamente`)
+      } else {
+        const saved = await create.mutateAsync(values)
+        onSaved(`Estudiante "${saved.nombre}" creado correctamente`)
+        reset()
+      }
     } catch (error) {
+      // Typed values are never cleared on error: the form is only reset after a successful create.
       if (!(error instanceof ApiError)) {
         setFormError('Ocurrió un error inesperado')
         return
       }
-      // 400 validation: map server field errors onto the form. 409 / business rule: show the message.
+      if (error.status === 0) {
+        setNetworkError(true)
+        setFormError(error.message)
+        return
+      }
+      // 400 validation: map server field errors onto the form. 403 / 409 / business rule: show the message.
       let mapped = false
       for (const [field, message] of Object.entries(error.fieldErrors ?? {})) {
         if (fieldNames.has(field)) {
@@ -62,7 +91,7 @@ export function EstudianteForm({ carreras }: { carreras: Carrera[] }) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 font-semibold">Registrar estudiante</h3>
+      <h3 className="mb-3 font-semibold">{isEdit ? 'Editar estudiante' : 'Registrar estudiante'}</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="nombre" label="Nombre" error={errors.nombre?.message}>
           <input id="nombre" aria-invalid={!!errors.nombre} aria-describedby={describedBy('nombre')} className={inputClass} {...register('nombre')} />
@@ -74,7 +103,7 @@ export function EstudianteForm({ carreras }: { carreras: Carrera[] }) {
           <input id="edad" type="number" inputMode="numeric" aria-invalid={!!errors.edad} aria-describedby={describedBy('edad')} className={inputClass} {...register('edad', { valueAsNumber: true })} />
         </Field>
         <Field id="carrera" label="Carrera" error={errors.carrera?.message}>
-          <select id="carrera" aria-invalid={!!errors.carrera} aria-describedby={describedBy('carrera')} className={inputClass} defaultValue="" {...register('carrera', { valueAsNumber: true })}>
+          <select id="carrera" aria-invalid={!!errors.carrera} aria-describedby={describedBy('carrera')} className={inputClass} {...register('carrera', { valueAsNumber: true })}>
             <option value="">Selecciona…</option>
             {carreras.map((c) => (
               <option key={c.id} value={c.id}>{c.nombre}</option>
@@ -84,13 +113,24 @@ export function EstudianteForm({ carreras }: { carreras: Carrera[] }) {
       </div>
 
       <div aria-live="polite" className="mt-3 text-sm">
-        {formError && <p role="alert" className="rounded-md bg-red-50 p-3 text-red-800">{formError}</p>}
-        {created && <p className="rounded-md bg-green-50 p-3 text-green-800">{created}</p>}
+        {formError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-red-50 p-3 text-red-800">
+            <p>{formError}</p>
+            {networkError && (
+              <Button variant="secondary" disabled={isPending} onClick={() => void onSubmit()}>
+                Reintentar
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="mt-3">
-        <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? 'Guardando…' : 'Guardar'}
+      <div className="mt-3 flex gap-2">
+        <Button type="submit" disabled={isPending}>
+          {isPending ? 'Guardando…' : 'Guardar'}
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Cancelar
         </Button>
       </div>
     </form>
