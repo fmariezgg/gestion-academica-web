@@ -37,3 +37,4 @@ failure inside the form, state classification / design documentation, analysis a
 - T4: `04-Entregables/Entrega_Gestion_Estados_React.pdf` (cover, same layout as Sesión 12).
 - Backend on :9090 answers 401 to unauthenticated GET/PUT `/estudiantes` (route exists, security on).
 - Pending: manual browser run as ADMIN and DOCENTE (needs the user's credentials).
+- Native review (RDD, tier high, 16 files / 1302 lines, base main..feat/gestion-estados @ 7ffbcf1): 4 lenses approved, no correction needed, authority acknowledged and burned.
